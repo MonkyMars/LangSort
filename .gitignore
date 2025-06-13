@@ -1,0 +1,4 @@
+# Ignore .filesort files
+.filesort
+# Ignore the filesort binary
+filesorting
