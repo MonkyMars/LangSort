@@ -27,8 +27,10 @@ type=golang
 
 ## Usage
 
+Install the right binary from the "[Release](https://github.com/MonkyMars/LangSort)" folder.
+Then run the binary:
+
 ```bash
-go build
 ./filesorting
 ```
 
