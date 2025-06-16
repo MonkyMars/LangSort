@@ -27,7 +27,7 @@ type=golang
 
 ## Usage
 
-Install the right binary from the "[Release](https://github.com/MonkyMars/LangSort)" folder.
+Install the right binary from the "[Release](https://github.com/MonkyMars/LangSort/tree/main/releases)" folder.
 Then run the binary:
 
 ```bash
