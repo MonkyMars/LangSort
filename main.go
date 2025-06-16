@@ -1,6 +1,7 @@
 package main
 
 import (
+	"filesorting/config"
 	"filesorting/move"
 	"filesorting/sanitize"
 	"filesorting/scan"
@@ -9,21 +10,26 @@ import (
 	"path/filepath"
 )
 
-var RootDir = "/home/levinoppers/Coding"
+func FolderExists(subPath string) bool {
+	var targetPath string
 
-func FolderExists(lang string) bool {
-	// Expand the root directory path
-	rootDir, err := filepath.Abs(RootDir)
+	if subPath == "" {
+		// Check if the base sort directory exists
+		targetPath = config.Config.Dir
+	} else {
+		// Check if a subdirectory within the sort directory exists
+		targetPath = filepath.Join(config.Config.Dir, subPath)
+	}
+
+	// Get absolute path
+	absPath, err := filepath.Abs(targetPath)
 	if err != nil {
-		fmt.Println("Error getting absolute path:", err)
+		fmt.Printf("Error getting absolute path for %s: %v\n", targetPath, err)
 		return false
 	}
 
-	// Construct the full path to the language folder
-	folderPath := filepath.Join(rootDir, lang)
-
 	// Check if the folder exists
-	info, err := os.Stat(folderPath)
+	info, err := os.Stat(absPath)
 	if os.IsNotExist(err) {
 		return false
 	}
@@ -31,34 +37,46 @@ func FolderExists(lang string) bool {
 }
 
 func main() {
+	fmt.Println("Loading config...")
+	if err := config.LoadConfig(); err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		return
+	}
+
+	// Validate that the sort directory exists
+	if !FolderExists("") { // Check if base sort directory exists
+		fmt.Printf("Error: Sort directory %s does not exist\n", config.Config.Dir)
+		return
+	}
+
 	fmt.Println("Scanning for .filesort files...")
 
 	// Option 1: Recursive scan (finds .filesort files in all subdirectories)
 	// configs, err := scan.ScanForFileSortFiles(RootDir)
 
 	// Option 2: Only scan direct subdirectories (1 level deep)
-	configs, err := scan.ScanDirectSubdirectories(RootDir)
+	filesortConfigs, err := scan.ScanDirectSubdirectories(config.Config.Dir)
 	if err != nil {
 		fmt.Printf("Error scanning directory: %v\n", err)
 		return
 	}
 
-	fmt.Printf("Found %d .filesort files:\n\n", len(configs))
+	fmt.Printf("Found %d .filesort files:\n\n", len(filesortConfigs))
 
-	for _, config := range configs {
-		fmt.Printf("  Type: %s\n", config.Type)
-		fmt.Printf("  Directory: %s\n", config.Dir)
+	for _, filesortConfig := range filesortConfigs {
+		fmt.Printf("  Type: %s\n", filesortConfig.Type)
+		fmt.Printf("  Directory: %s\n", filesortConfig.Dir)
 		fmt.Printf("\n")
 
 		// Get the project name from the source directory
-		projectName := filepath.Base(config.Dir)
-		
-		// Construct destination: /Coding/Language/ProjectName
-		destDir := filepath.Join(RootDir, sanitize.Sanitize(config.Type), projectName)
-		
-		err := move.MoveDir(config.Dir, destDir, config.Type)
+		projectName := filepath.Base(filesortConfig.Dir)
+
+		// Construct destination: /Coding/Language/ProjectName e.g.,
+		destDir := filepath.Join(config.Config.Dir, sanitize.Sanitize(filesortConfig.Type), projectName)
+
+		err := move.MoveDir(filesortConfig.Dir, destDir, filesortConfig.Type)
 		if err != nil {
-			fmt.Printf("Error moving %s: %v\n", config.Dir, err)
+			fmt.Printf("Error moving %s: %v\n", filesortConfig.Dir, err)
 		}
 	}
 }

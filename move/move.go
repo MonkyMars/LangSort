@@ -5,25 +5,37 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func folderExists(dir string) bool {
-	// Expand the root directory path
-	rootDir, err := filepath.Abs(dir)
+	// Clean the path for cross-platform compatibility
+	dir = filepath.Clean(dir)
+
+	// Get absolute path
+	absDir, err := filepath.Abs(dir)
 	if err != nil {
-		fmt.Println("Error getting absolute path:", err)
+		fmt.Printf("Error getting absolute path for %s: %v\n", dir, err)
 		return false
 	}
 
 	// Check if the folder exists
-	info, err := os.Stat(rootDir)
+	info, err := os.Stat(absDir)
 	if os.IsNotExist(err) {
+		return false
+	}
+	if err != nil {
+		fmt.Printf("Error checking directory %s: %v\n", absDir, err)
 		return false
 	}
 	return info.IsDir()
 }
 
 func MoveDir(sourceDir, destDir, lang string) error {
+	// Clean and normalize paths for cross-platform compatibility
+	sourceDir = filepath.Clean(sourceDir)
+	destDir = filepath.Clean(destDir)
+
 	// Check if source directory exists
 	if exists := folderExists(sourceDir); !exists {
 		return fmt.Errorf("source directory %s does not exist", sourceDir)
@@ -31,7 +43,7 @@ func MoveDir(sourceDir, destDir, lang string) error {
 
 	// Create the parent directory of the destination if it doesn't exist
 	parentDir := filepath.Dir(destDir)
-	if err := os.MkdirAll(parentDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(parentDir, 0755); err != nil {
 		return fmt.Errorf("error creating parent directory %s: %w", parentDir, err)
 	}
 
@@ -50,8 +62,9 @@ func MoveDir(sourceDir, destDir, lang string) error {
 			return fmt.Errorf("error copying directory from %s to %s: %w", sourceDir, destDir, err)
 		}
 
-		// Explicitly remove the source directory after successful copy
-		if err := os.RemoveAll(sourceDir); err != nil {
+		// On Windows, there might be a slight delay before the file system recognizes the copy is complete
+		// Add a small retry mechanism for the removal
+		if err := removeWithRetry(sourceDir, 3); err != nil {
 			return fmt.Errorf("error removing source directory %s after copy: %w", sourceDir, err)
 		}
 
@@ -66,6 +79,24 @@ func MoveDir(sourceDir, destDir, lang string) error {
 	}
 
 	return nil
+}
+
+// removeWithRetry attempts to remove a directory with retries for Windows compatibility
+func removeWithRetry(path string, maxRetries int) error {
+	var lastErr error
+	for i := 0; i < maxRetries; i++ {
+		if err := os.RemoveAll(path); err != nil {
+			lastErr = err
+			if i < maxRetries-1 {
+				// Wait a bit before retrying (useful on Windows)
+				time.Sleep(time.Millisecond * 100)
+				continue
+			}
+		} else {
+			return nil
+		}
+	}
+	return lastErr
 }
 
 // copyDir recursively copies a directory from src to dst
@@ -100,7 +131,11 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			fmt.Printf("Warning: Failed to close source file: %v\n", err)
+		}
+	}()
 
 	// Create the destination directory if it doesn't exist
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
@@ -111,7 +146,11 @@ func copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			fmt.Printf("Warning: Failed to close destination file: %v\n", err)
+		}
+	}()
 
 	_, err = io.Copy(dstFile, srcFile)
 	if err != nil {

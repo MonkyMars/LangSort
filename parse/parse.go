@@ -1,9 +1,11 @@
 package parse
 
 import (
+	"filesorting/config"
 	"filesorting/structs"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -35,10 +37,18 @@ func ParseFileSortFile(filepath string) (structs.FileSortConfig, error) {
 
 		switch key {
 		case "type":
+			isValid := validateValue(value)
+			if !isValid {
+				return config, fmt.Errorf("project language '%s' is not in accepted languages list", value)
+			}
 			config.Type = value
 		default:
 			return config, fmt.Errorf("unknown key: %s", key)
 		}
 	}
 	return config, nil
+}
+
+func validateValue(value string) bool {
+	return slices.Contains(config.Config.AcceptedLanguages, value)
 }
